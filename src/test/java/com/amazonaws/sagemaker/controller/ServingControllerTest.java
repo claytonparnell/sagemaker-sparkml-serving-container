@@ -38,17 +38,18 @@ import ml.combust.mleap.runtime.javadsl.LeapFrameBuilderSupport;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.mockito.MockedStatic;
 import org.mockito.Mockito;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest({ScalaUtils.class, SystemUtils.class})
 class ServingControllerTest {
+
+    private MockedStatic<SystemUtils> mockedSystemUtils;
+
+    private MockedStatic<ScalaUtils> mockedScalaUtils;
 
     private ServingController controller;
     private DataConversionHelper converter = new DataConversionHelper(new LeapFrameBuilderSupport(),
@@ -92,14 +93,24 @@ class ServingControllerTest {
         this.buildDefaultSageMakerRequestObject();
         this.buildResponseLeapFrame();
         controller = new ServingController(mleapTransformerMock, responseHelper, converter, mapper);
-        PowerMockito.mockStatic(ScalaUtils.class);
-        PowerMockito.mockStatic(SystemUtils.class);
-        PowerMockito
-            .when(ScalaUtils.transformLeapFrame(Mockito.any(Transformer.class), Mockito.any(DefaultLeapFrame.class)))
+        mockedScalaUtils
+            .when(() -> ScalaUtils.transformLeapFrame(Mockito.any(Transformer.class), Mockito.any(DefaultLeapFrame.class)))
             .thenReturn(responseLeapFrame);
-        PowerMockito.when(ScalaUtils.selectFromLeapFrame(Mockito.any(DefaultLeapFrame.class), Mockito.anyString()))
+        mockedScalaUtils.when(() -> ScalaUtils.selectFromLeapFrame(Mockito.any(DefaultLeapFrame.class), Mockito.anyString()))
             .thenReturn(responseLeapFrame);
-        PowerMockito.when(ScalaUtils.getOutputArrayRow(Mockito.any(DefaultLeapFrame.class))).thenReturn(outputArrayRow);
+        mockedScalaUtils.when(() -> ScalaUtils.getOutputArrayRow(Mockito.any(DefaultLeapFrame.class))).thenReturn(outputArrayRow);
+    }
+
+    @BeforeEach
+    void setUpStaticMocks() {
+        mockedSystemUtils = Mockito.mockStatic(SystemUtils.class);
+        mockedScalaUtils = Mockito.mockStatic(ScalaUtils.class);
+    }
+
+    @AfterEach
+    void tearDownStaticMocks() {
+        mockedScalaUtils.closeOnDemand();
+        mockedSystemUtils.closeOnDemand();
     }
 
     @Test
@@ -148,8 +159,8 @@ class ServingControllerTest {
         outputColumn = new ColumnSchema("out_name", "int", "array");
         List<Object> outputResponse = Lists.newArrayList(1, 2);
         sro = new SageMakerRequestObject(new DataSchema(inputColumns, outputColumn), inputData);
-        PowerMockito
-            .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedScalaUtils
+            .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
             .thenReturn(outputResponse.iterator());
         final ResponseEntity<String> output = controller.transformRequestJson(sro, "text/csv");
         Assert.assertEquals(output.getBody(), "1,2");
@@ -160,8 +171,8 @@ class ServingControllerTest {
         outputColumn = new ColumnSchema("out_name", "int", "vector");
         List<Object> outputResponse = Lists.newArrayList(1, 2);
         sro = new SageMakerRequestObject(new DataSchema(inputColumns, outputColumn), inputData);
-        PowerMockito
-            .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedScalaUtils
+            .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
             .thenReturn(outputResponse.iterator());
         final ResponseEntity<String> output = controller.transformRequestJson(sro, "application/jsonlines");
         Assert.assertEquals(output.getBody(), "{\"features\":[1,2]}");
@@ -172,8 +183,8 @@ class ServingControllerTest {
         outputColumn = new ColumnSchema("out_name", "int", "array");
         List<Object> outputResponse = Lists.newArrayList(1, 2);
         sro = new SageMakerRequestObject(new DataSchema(inputColumns, outputColumn), inputData);
-        PowerMockito
-            .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedScalaUtils
+            .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
             .thenReturn(outputResponse.iterator());
         final ResponseEntity<String> output = controller.transformRequestJson(sro, null);
         Assert.assertEquals(output.getBody(), "1,2");
@@ -183,8 +194,8 @@ class ServingControllerTest {
     public void testListValueMLeapThrowsException() {
         outputColumn = new ColumnSchema("out_name", "int", "array");
         sro = new SageMakerRequestObject(new DataSchema(inputColumns, outputColumn), inputData);
-        PowerMockito
-            .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedScalaUtils
+            .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
             .thenThrow(new RuntimeException("input data is not valid"));
         final ResponseEntity<String> output = controller.transformRequestJson(sro, "text/csv");
         Assert.assertEquals(output.getStatusCode(), HttpStatus.BAD_REQUEST);
@@ -202,9 +213,9 @@ class ServingControllerTest {
         schemaInJson = "{\"input\":[{\"name\":\"test_name_1\",\"type\":\"int\"},{\"name\":\"test_name_2\","
             + "\"type\":\"double\"}],\"output\":{\"name\":\"out_name\",\"type\":\"int\",\"struct\":\"vector\"}}";
         List<Object> outputResponse = Lists.newArrayList(1, 2);
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
-        PowerMockito
-            .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
+        mockedScalaUtils
+            .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
             .thenReturn(outputResponse.iterator());
         final ResponseEntity<String> output = controller.transformRequestCsv("1,2.0".getBytes(), "text/csv");
         Assert.assertEquals(output.getBody(), "1,2");
@@ -212,7 +223,7 @@ class ServingControllerTest {
 
     @Test
     public void testCsvApiWithNullInput() {
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
         final ResponseEntity<String> output = controller.transformRequestCsv(null, "text/csv");
         Assert.assertEquals(output.getStatusCode(), HttpStatus.NO_CONTENT);
     }
@@ -221,9 +232,9 @@ class ServingControllerTest {
     public void testListValueMLeapThrowsExceptionCsvApi() {
         schemaInJson = "{\"input\":[{\"name\":\"test_name_1\",\"type\":\"int\"},{\"name\":\"test_name_2\","
             + "\"type\":\"double\"}],\"output\":{\"name\":\"out_name\",\"type\":\"int\",\"struct\":\"vector\"}}";
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
-        PowerMockito
-            .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
+        mockedScalaUtils
+            .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
             .thenThrow(new RuntimeException("input data is not valid"));
         final ResponseEntity<String> output = controller.transformRequestCsv("1,2.0".getBytes(), "text/csv");
         Assert.assertEquals(output.getStatusCode(), HttpStatus.BAD_REQUEST);
@@ -242,7 +253,7 @@ class ServingControllerTest {
                 + "{\"name\":\"out_name\",\"type\":\"int\",\"struct\":\"vector\"}"
                 + "}";
 
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA"))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA"))
                 .thenReturn(schemaInJson);
 
         List<Object> outputResponseForFirstInput = Lists.newArrayList(1, 2);
@@ -254,8 +265,8 @@ class ServingControllerTest {
         List<Object> outputResponseForSeventhInput = Lists.newArrayList(13, 14);
         List<Object> outputResponseForEighthInput = Lists.newArrayList(15, 16);
 
-        PowerMockito
-                .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedScalaUtils
+                .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
                 .thenReturn(outputResponseForFirstInput.iterator())
                 .thenReturn(outputResponseForSecondInput.iterator())
                 .thenReturn(outputResponseForThirdInput.iterator())
@@ -306,7 +317,7 @@ class ServingControllerTest {
                 + "{\"name\":\"out_name\",\"type\":\"int\",\"struct\":\"vector\"}"
                 + "}";
 
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA"))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA"))
                 .thenReturn(schemaInJson);
 
         List<Object> outputResponseForFirstInput = Lists.newArrayList(1, 2);
@@ -318,8 +329,8 @@ class ServingControllerTest {
         List<Object> outputResponseForSeventhInput = Lists.newArrayList(13, 14);
         List<Object> outputResponseForEighthInput = Lists.newArrayList(15, 16);
 
-        PowerMockito
-                .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedScalaUtils
+                .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
                 .thenReturn(outputResponseForFirstInput.iterator())
                 .thenReturn(outputResponseForSecondInput.iterator())
                 .thenReturn(outputResponseForThirdInput.iterator())
@@ -374,7 +385,7 @@ class ServingControllerTest {
                 + "{\"name\":\"out_name\",\"type\":\"int\",\"struct\":\"vector\"}"
                 + "}";
 
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA"))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA"))
                 .thenReturn(schemaInJson);
 
         List<Object> outputResponseForFirstInput = Lists.newArrayList(1, 2);
@@ -386,8 +397,8 @@ class ServingControllerTest {
         List<Object> outputResponseForSeventhInput = Lists.newArrayList(13, 14);
         List<Object> outputResponseForEighthInput = Lists.newArrayList(15, 16);
 
-        PowerMockito
-                .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedScalaUtils
+                .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
                 .thenReturn(outputResponseForFirstInput.iterator())
                 .thenReturn(outputResponseForSecondInput.iterator())
                 .thenReturn(outputResponseForThirdInput.iterator())
@@ -445,8 +456,8 @@ class ServingControllerTest {
         List<Object> outputResponseForThirdInput = Lists.newArrayList(5, 6);
         List<Object> outputResponseForFourthInput = Lists.newArrayList(7, 8);
 
-        PowerMockito
-                .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedScalaUtils
+                .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
                 .thenReturn(outputResponseForFirstInput.iterator())
                 .thenReturn(outputResponseForSecondInput.iterator())
                 .thenReturn(outputResponseForThirdInput.iterator())
@@ -463,9 +474,9 @@ class ServingControllerTest {
     public void testJsonLinesApiWithListInputThrowsException() {
         schemaInJson = "{\"input\":[{\"name\":\"test_name_1\",\"type\":\"int\"},{\"name\":\"test_name_2\","
                 + "\"type\":\"double\"},{\"name\":\"test_name_3\",\"type\":\"string\"}],\"output\":{\"name\":\"out_name\",\"type\":\"int\",\"struct\":\"vector\"}}";
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
-        PowerMockito
-                .when(ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
+        mockedScalaUtils
+                .when(() -> ScalaUtils.getJavaObjectIteratorFromArrayRow(Mockito.any(ArrayRow.class), Mockito.anyString()))
                 .thenThrow(new RuntimeException("input data is not valid"));
         final ResponseEntity<String> output = controller.transformRequestJsonLines("{\"data\":[[1,2.0,\"TEST1\"], [2,3.0,\"TEST\"]]}".getBytes(), "text/csv");
         Assert.assertEquals(output.getStatusCode(), HttpStatus.BAD_REQUEST);
@@ -474,28 +485,28 @@ class ServingControllerTest {
 
     @Test
     public void testJsonLinesApiWithNullInput() {
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
         final ResponseEntity<String> output = controller.transformRequestJsonLines(null, "text/csv");
         Assert.assertEquals(output.getStatusCode(), HttpStatus.BAD_REQUEST);
     }
 
     @Test
     public void testJsonLinesApiWithEmptyInput() {
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
         final ResponseEntity<String> output = controller.transformRequestJsonLines(new byte[0], "text/csv");
         Assert.assertEquals(output.getStatusCode(), HttpStatus.NO_CONTENT);
     }
 
     @Test
     public void testParseAcceptEmptyFromRequestEnvironmentPresent() {
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT"))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT"))
             .thenReturn("application/jsonlines;data=text");
         Assert.assertEquals(controller.retrieveAndVerifyAccept(null), "application/jsonlines;data=text");
     }
 
     @Test
     public void testParseAcceptAnyFromRequestEnvironmentPresent() {
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT"))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT"))
             .thenReturn("application/jsonlines;data=text");
         Assert.assertEquals(controller.retrieveAndVerifyAccept("*/*"), "application/jsonlines;data=text");
     }
@@ -512,7 +523,7 @@ class ServingControllerTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidAcceptInEnvironment() {
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT"))
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_DEFAULT_INVOCATIONS_ACCEPT"))
             .thenReturn("application/json");
         controller.retrieveAndVerifyAccept("application/json");
     }
@@ -523,7 +534,7 @@ class ServingControllerTest {
             new ColumnSchema("name_2", "type_2", "struct_2"));
         outputColumn = new ColumnSchema("name_out_1", "type_out_1", "struct_out_1");
         DataSchema ds = new DataSchema(inputColumns, outputColumn);
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
         DataSchema outputSchema = controller.retrieveAndVerifySchema(ds, mapper);
         Assert.assertEquals(outputSchema.getInput().size(), 2);
         Assert.assertEquals(outputSchema.getInput().get(0).getName(), "name_1");
@@ -534,7 +545,7 @@ class ServingControllerTest {
     public void testSchemaPresentOnlyInEnvironment() throws IOException {
         schemaInJson = "{\"input\":[{\"name\":\"i_1\",\"type\":\"int\"}],\"output\":{\"name\":\"o_1\","
             + "\"type\":\"double\"}}";
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_SPARKML_SCHEMA")).thenReturn(schemaInJson);
         DataSchema outputSchema = controller.retrieveAndVerifySchema(null, mapper);
         Assert.assertEquals(outputSchema.getInput().size(), 1);
         Assert.assertEquals(outputSchema.getInput().get(0).getName(), "i_1");

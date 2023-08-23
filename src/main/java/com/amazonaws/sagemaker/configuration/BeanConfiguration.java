@@ -89,7 +89,7 @@ public class BeanConfiguration {
     @Bean
     public JettyServletWebServerFactory provideJettyServletWebServerFactory() {
         final JettyServletWebServerFactory jettyServlet = new JettyServletWebServerFactory(
-            new Integer(this.getHttpListenerPort()));
+            Integer.parseInt(this.getHttpListenerPort()));
         final List<JettyServerCustomizer> serverCustomizerList = Lists.newArrayList();
         final JettyServerCustomizer serverCustomizer = server -> {
             final QueuedThreadPool threadPool = server.getBean(QueuedThreadPool.class);

@@ -19,21 +19,31 @@ package com.amazonaws.sagemaker.configuration;
 import com.amazonaws.sagemaker.utils.SystemUtils;
 import java.io.File;
 import org.junit.Assert;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 import org.springframework.boot.web.embedded.jetty.JettyServletWebServerFactory;
 
-@RunWith(PowerMockRunner.class)
-@PrepareForTest(SystemUtils.class)
 public class BeanConfigurationTest {
 
     public BeanConfigurationTest() {
     }
 
     private BeanConfiguration configuration = new BeanConfiguration();
+
+    private MockedStatic<SystemUtils> mockedSystemUtils;
+
+    @BeforeEach
+    void setUpStaticMocks() {
+        mockedSystemUtils = Mockito.mockStatic(SystemUtils.class);
+    }
+
+    @AfterEach
+    void tearDownStaticMocks() {
+        mockedSystemUtils.closeOnDemand();
+    }
 
     @Test
     public void testModelLocationNotNull() {
@@ -89,8 +99,7 @@ public class BeanConfigurationTest {
 
     @Test
     public void testParsePortFromEnvironment() {
-        PowerMockito.mockStatic(System.class);
-        PowerMockito.when(SystemUtils.getEnvironmentVariable("SAGEMAKER_BIND_TO_PORT")).thenReturn("7070");
+        mockedSystemUtils.when(() -> SystemUtils.getEnvironmentVariable("SAGEMAKER_BIND_TO_PORT")).thenReturn("7070");
         Assert.assertEquals(configuration.getHttpListenerPort(), "7070");
     }
 
